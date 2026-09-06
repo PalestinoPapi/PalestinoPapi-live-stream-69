@@ -127,7 +127,8 @@ app.get('/api/stream/status', requireAuth, async (req, res) => {
   if (!state.liveInput) return res.json({ live: false });
   try {
     const result = await cfFetch(`/live_inputs/${state.liveInput.uid}`);
-    res.json({ live: !!result.status?.current?.state && result.status.current.state === 'connected' });
+    const live = result.status === 'connected' || result.status === 'reconnected';
+    res.json({ live });
   } catch (err) {
     res.json({ live: false });
   }
