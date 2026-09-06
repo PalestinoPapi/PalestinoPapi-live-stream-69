@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --panel: #141417;
+    --line: #26262b;
+    --text: #ededed;
+    --muted: #8a8a8e;
+    --signal: #e8432c;
+    --signal-dim: #5c231b;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .layout {
+    display: flex;
+    height: 100vh;
+  }
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .mast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--signal-dim);
+  }
+  .dot.live {
+    background: var(--signal);
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(232,67,44,.55); }
+    70% { box-shadow: 0 0 0 8px rgba(232,67,44,0); }
+    100% { box-shadow: 0 0 0 0 rgba(232,67,44,0); }
+  }
+  .mast-label {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+  .video-wrap {
+    flex: 1;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .offline-msg {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+  .chat {
+    width: 320px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  .msg .name {
+    color: #b8b8bc;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .msg .text {
+    color: var(--text);
+    word-break: break-word;
+  }
+  .chat-input {
+    border-top: 1px solid var(--line);
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+  }
+  .chat-input input {
+    flex: 1;
+    background: #0e0e11;
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 10px;
+    font-size: 13.5px;
+    font-family: inherit;
+  }
+  .chat-input input:focus { outline: none; border-color: var(--signal-dim); }
+  .chat-input button {
+    background: var(--signal);
+    color: #fff;
+    border: none;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .name-gate {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,12,.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .name-gate .box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 20px;
+    width: 260px;
+  }
+  .name-gate label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .name-gate input {
+    width: 100%;
+    background: #0e0e11;
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 10px;
+    font-size: 13.5px;
+    margin-bottom: 10px;
+    font-family: inherit;
+  }
+  .name-gate button {
+    width: 100%;
+    background: var(--signal);
+    color: #fff;
+    border: none;
+    padding: 9px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  @media (max-width: 720px) {
+    .layout { flex-direction: column; }
+    .chat { width: 100%; height: 40vh; border-left: none; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="stage">
+    <div class="mast">
+      <div class="dot" id="liveDot"></div>
+      <span class="mast-label" id="statusLabel">connecting…</span>
+    </div>
+    <div class="video-wrap">
+      <video id="video" playsinline autoplay muted></video>
+      <div class="offline-msg" id="offlineMsg" style="display:none;">Nothing live right now. This page will start playing automatically once the stream begins.</div>
+    </div>
+  </div>
+  <div class="chat">
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="Say something…" maxlength="500" />
+      <button onclick="sendChat()">Send</button>
+    </div>
+    <div class="name-gate" id="nameGate">
+      <div class="box">
+        <label for="nameInput">Pick a display name</label>
+        <input type="text" id="nameInput" maxlength="24" placeholder="e.g. viewer123" />
+        <button onclick="setName()">Join chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const watchId = window.location.pathname.split('/').pop();
+let userName = localStorage.getItem('chatName');
+let ws;
+let hls;
+
+function setName() {
+  const val = document.getElementById('nameInput').value.trim();
+  if (!val) return;
+  userName = val.slice(0, 24);
+  localStorage.setItem('chatName', userName);
+  document.getElementById('nameGate').style.display = 'none';
+  connectChat();
+}
+
+if (userName) {
+  document.getElementById('nameGate').style.display = 'none';
+}
+
+function connectChat() {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${window.location.host}/ws?room=${encodeURIComponent(watchId)}&name=${encodeURIComponent(userName)}`);
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'chat') appendMessage(data.name, data.text);
+  };
+}
+
+function appendMessage(name, text) {
+  const log = document.getElementById('chatLog');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `<span class="name"></span><span class="text"></span>`;
+  el.querySelector('.name').textContent = name + ':';
+  el.querySelector('.text').textContent = text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'chat', text }));
+  input.value = '';
+}
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChat();
+});
+
+if (userName) connectChat();
+
+async function initPlayer() {
+  try {
+    const res = await fetch(`/api/watch/${watchId}`);
+    if (!res.ok) {
+      document.getElementById('statusLabel').textContent = 'stream not found';
+      return;
+    }
+    const data = await res.json();
+    const video = document.getElementById('video');
+
+    if (Hls.isSupported()) {
+      hls = new Hls({ liveSyncDuration: 3, liveMaxLatencyDuration: 8 });
+      hls.loadSource(data.hlsUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (event, errData) => {
+        if (errData.fatal) {
+          setOffline();
+          setTimeout(initPlayer, 5000);
+        }
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setLive();
+        video.play().catch(() => {});
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = data.hlsUrl;
+      video.addEventListener('loadedmetadata', () => {
+        setLive();
+        video.play().catch(() => {});
+      });
+    }
+  } catch (err) {
+    setOffline();
+    setTimeout(initPlayer, 5000);
+  }
+}
+
+function setLive() {
+  document.getElementById('liveDot').classList.add('live');
+  document.getElementById('statusLabel').textContent = 'live';
+  document.getElementById('offlineMsg').style.display = 'none';
+}
+function setOffline() {
+  document.getElementById('liveDot').classList.remove('live');
+  document.getElementById('statusLabel').textContent = 'offline';
+  document.getElementById('offlineMsg').style.display = 'flex';
+}
+
+initPlayer();
+</script>
+</body>
+</html>
