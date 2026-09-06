@@ -1,1 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Broadcast Control</title>
+<style>
+  @font-face {
+    font-family: 'system-fallback';
+    src: local(sans-serif);
+  }
+  :root {
+    --bg: #0a0a0c;
+    --panel: #141417;
+    --line: #26262b;
+    --text: #ededed;
+    --muted: #8a8a8e;
+    --signal: #e8432c;
+    --signal-dim: #5c231b;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .frame {
+    width: 100%;
+    max-width: 560px;
+  }
+  .mast {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .mast .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--signal-dim);
+    flex-shrink: 0;
+  }
+  .mast .dot.live {
+    background: var(--signal);
+    box-shadow: 0 0 0 0 rgba(232,67,44,.6);
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(232,67,44,.55); }
+    70% { box-shadow: 0 0 0 8px rgba(232,67,44,0); }
+    100% { box-shadow: 0 0 0 0 rgba(232,67,44,0); }
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .mast-status {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .panel {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 28px;
+  }
+  .row {
+    margin-bottom: 20px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  label {
+    display: block;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    background: #0e0e11;
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 11px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input[type="password"]:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--signal-dim);
+  }
+  button {
+    background: var(--signal);
+    color: #fff;
+    border: none;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: #d13a25; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text);
+  }
+  button.secondary:hover { border-color: var(--muted); }
+  .field-value {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .field-value code {
+    flex: 1;
+    background: #0e0e11;
+    border: 1px solid var(--line);
+    padding: 11px 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    word-break: break-all;
+    color: #d6d6d8;
+  }
+  .field-value button {
+    flex-shrink: 0;
+    padding: 0 14px;
+  }
+  .hint {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .divider {
+    height: 1px;
+    background: var(--line);
+    margin: 24px 0;
+  }
+  .error {
+    color: var(--signal);
+    font-size: 13px;
+    margin-top: 10px;
+    display: none;
+  }
+  #dashboard { display: none; }
+  a.watch-link {
+    color: #d6d6d8;
+    text-decoration: none;
+    border-bottom: 1px solid var(--signal-dim);
+  }
+  a.watch-link:hover { border-color: var(--signal); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="mast">
+    <div class="dot" id="liveDot"></div>
+    <h1>Broadcast Control</h1>
+    <span class="mast-status" id="liveStatus">checking…</span>
+  </div>
 
+  <div class="panel" id="loginPanel">
+    <div class="row">
+      <label for="pw">Dashboard password</label>
+      <input type="password" id="pw" placeholder="••••••••••" autofocus />
+    </div>
+    <button onclick="login()">Enter</button>
+    <div class="error" id="loginError">Wrong password.</div>
+  </div>
+
+  <div class="panel" id="dashboard">
+    <div class="row" id="preCreate">
+      <label>No stream configured yet</label>
+      <button onclick="createStream()">Generate stream</button>
+      <div class="hint">This creates a fresh RTMP destination. Only do this once — re-running it will invalidate the old key.</div>
+    </div>
+
+    <div id="postCreate" style="display:none;">
+      <div class="row">
+        <label>RTMP server URL (paste into OBS → Settings → Stream → Server)</label>
+        <div class="field-value">
+          <code id="rtmpUrl">—</code>
+          <button class="secondary" onclick="copyField('rtmpUrl')">Copy</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Stream key (paste into OBS → Settings → Stream → Stream Key)</label>
+        <div class="field-value">
+          <code id="rtmpKey">—</code>
+          <button class="secondary" onclick="copyField('rtmpKey')">Copy</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <label>Share this link with your audience</label>
+        <div class="field-value">
+          <code id="watchLink">—</code>
+          <button class="secondary" onclick="copyField('watchLink')">Copy</button>
+        </div>
+        <div class="hint">Anyone with this link can watch and chat while you're live. It won't show anything before you start streaming in OBS.</div>
+      </div>
+      <div class="divider"></div>
+      <button class="secondary" onclick="createStream()">Regenerate (invalidates current key)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let token = localStorage.getItem('dashToken') || null;
+
+async function login() {
+  const password = document.getElementById('pw').value;
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    document.getElementById('loginError').style.display = 'block';
+    return;
+  }
+  const data = await res.json();
+  token = data.token;
+  localStorage.setItem('dashToken', token);
+  showDashboard();
+}
+
+async function showDashboard() {
+  document.getElementById('loginPanel').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  await loadCurrent();
+  pollStatus();
+  setInterval(pollStatus, 8000);
+}
+
+async function loadCurrent() {
+  const res = await fetch('/api/stream/current', { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return;
+  const data = await res.json();
+  if (data.liveInput === null) return;
+  renderCredentials(data);
+}
+
+async function createStream() {
+  const res = await fetch('/api/stream/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name: 'Live' }),
+  });
+  if (!res.ok) {
+    alert('Could not create stream — check server logs / Cloudflare credentials.');
+    return;
+  }
+  const data = await res.json();
+  renderCredentials(data);
+}
+
+function renderCredentials(data) {
+  document.getElementById('preCreate').style.display = 'none';
+  document.getElementById('postCreate').style.display = 'block';
+  document.getElementById('rtmpUrl').textContent = data.rtmpsUrl;
+  document.getElementById('rtmpKey').textContent = data.rtmpsKey;
+  document.getElementById('watchLink').textContent = data.watchLink;
+}
+
+function copyField(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text);
+}
+
+async function pollStatus() {
+  const res = await fetch('/api/stream/status', { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return;
+  const data = await res.json();
+  const dot = document.getElementById('liveDot');
+  const label = document.getElementById('liveStatus');
+  if (data.live) {
+    dot.classList.add('live');
+    label.textContent = 'live';
+  } else {
+    dot.classList.remove('live');
+    label.textContent = 'offline';
+  }
+}
+
+if (token) {
+  showDashboard();
+}
+</script>
+</body>
+</html>
