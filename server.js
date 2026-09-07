@@ -10,6 +10,7 @@ const { nanoid } = require('nanoid');
 const {
   CF_ACCOUNT_ID,
   CF_API_TOKEN,
+  CF_CUSTOMER_SUBDOMAIN,
   DASHBOARD_PASSWORD,
   PORT = 3000,
   PUBLIC_BASE_URL = `http://localhost:${PORT}`,
