@@ -141,7 +141,7 @@ app.get('/api/watch/:watchId', async (req, res) => {
     return res.status(404).json({ error: 'Stream not found' });
   }
   // Cloudflare Stream's HLS manifest for a live input, once it's receiving video
-  const hlsUrl = `https://customer-${CF_ACCOUNT_ID}.cloudflarestream.com/${state.liveInput.uid}/manifest/video.m3u8`;
+  const hlsUrl = `https://${CF_CUSTOMER_SUBDOMAIN}.cloudflarestream.com/${state.liveInput.uid}/manifest/video.m3u8`;
   res.json({ hlsUrl, streamId: state.liveInput.watchId });
 });
 
